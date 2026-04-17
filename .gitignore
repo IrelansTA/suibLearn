@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite3
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Audio temp files
+*.wav
+*.mp3
+*.m4a
+*.flac
+!backend/app/tests/fixtures/
+
+# Logs
+*.log
+
+# Media / uploaded videos
+backend/data/
+*.mp4
+*.mkv
+*.tar.gz
