@@ -32,7 +32,6 @@ temp/
 
 # Node
 node_modules/
-frontend/dist/
 frontend/.vite/
 
 # OS
