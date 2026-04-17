@@ -18,9 +18,13 @@ router = APIRouter()
 
 
 @router.get("")
-async def api_list_videos(search: str = "", language: str = ""):
-    """List all videos with optional search and language filter."""
-    videos = await list_videos(search=search, language=language)
+async def api_list_videos(search: str = "", language: str = "", collection_id: str = ""):
+    """List all videos with optional search, language, and collection filter."""
+    videos = await list_videos(
+        search=search,
+        language=language,
+        collection_id=collection_id if collection_id else None,
+    )
     return {"videos": videos, "total": len(videos)}
 
 

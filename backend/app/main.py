@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.models.database import init_db
-from app.routers import upload, library
+from app.routers import upload, library, collections
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.add_middleware(
 # Mount routers
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(library.router, prefix="/api/videos", tags=["library"])
+app.include_router(collections.router, prefix="/api/collections", tags=["collections"])
 
 # Serve media files (for local dev; in production Nginx handles this)
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")

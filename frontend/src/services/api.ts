@@ -56,6 +56,21 @@ export interface UploadResult {
   message: string;
 }
 
+export interface CollectionItem {
+  id: string;
+  name: string;
+  cover_path: string | null;
+  source_language: string;
+  video_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectionDetail {
+  collection: CollectionItem;
+  videos: VideoItem[];
+}
+
 // --- API Functions :::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 const BASE_URL = '/api';
@@ -133,4 +148,52 @@ export async function getStorageInfo(): Promise<StorageInfo> {
 /** Get video file URL (served by Nginx) */
 export function getVideoFileUrl(videoId: string): string {
   return `/media/${videoId}/video.mp4`;
+}
+
+// --- Collection API Functions ::::::::::::::::::::::::::::::::::::::::::::
+
+/** List all collections */
+export async function getCollections(): Promise<{ collections: CollectionItem[]; total: number }> {
+  return request('/collections');
+}
+
+/** Get collection detail with videos */
+export async function getCollectionDetail(collectionId: string): Promise<CollectionDetail> {
+  return request(`/collections/${collectionId}`);
+}
+
+/** Create a new collection */
+export async function createCollection(formData: FormData): Promise<CollectionItem> {
+  const resp = await fetch(`${BASE_URL}/collections`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(data.detail || `Request failed: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+/** Update a collection */
+export async function updateCollection(collectionId: string, formData: FormData): Promise<CollectionItem> {
+  const resp = await fetch(`${BASE_URL}/collections/${collectionId}`, {
+    method: 'PUT',
+    body: formData,
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(data.detail || `Request failed: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+/** Delete a collection */
+export async function deleteCollection(collectionId: string): Promise<void> {
+  await request(`/collections/${collectionId}`, { method: 'DELETE' });
+}
+
+/** Get cover image URL */
+export function getCoverUrl(coverPath: string): string {
+  return `/media/${coverPath}`;
 }

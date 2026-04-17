@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { uploadFiles } from '../../services/api';
 
 interface Props {
+  collectionId?: string;
   onSuccess: (videoId: string) => void;
   onCancel: () => void;
 }
@@ -38,7 +39,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export default function UploadForm({ onSuccess, onCancel }: Props) {
+export default function UploadForm({ collectionId, onSuccess, onCancel }: Props) {
   const [title, setTitle] = useState('');
   const [language, setLanguage] = useState('ja');
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -108,6 +109,9 @@ export default function UploadForm({ onSuccess, onCancel }: Props) {
         formData.append('source_language', language);
         formData.append('video', videoFile!);
         formData.append('subtitle', subtitleFile!);
+        if (collectionId) {
+          formData.append('collection_id', collectionId);
+        }
 
         const result = await uploadFiles(formData, (pct) => setProgress(pct));
         setStatus('success');
@@ -117,7 +121,7 @@ export default function UploadForm({ onSuccess, onCancel }: Props) {
         setError(err.message || '上传失败，请重试');
       }
     },
-    [videoFile, subtitleFile, title, language, onSuccess],
+    [videoFile, subtitleFile, title, language, collectionId, onSuccess],
   );
 
   const isUploading = status === 'uploading';
@@ -131,9 +135,14 @@ export default function UploadForm({ onSuccess, onCancel }: Props) {
       <div className="bg-[#181818] border border-[#2a2a2a] rounded-2xl p-6 sm:p-8 shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">
-            <span className="text-[#e74c3c]">上传</span>视频
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold">
+              <span className="text-[#e74c3c]">上传</span>视频
+            </h2>
+            {collectionId && (
+              <p className="text-xs text-[#888] mt-1">上传至合集</p>
+            )}
+          </div>
           <button
             type="button"
             onClick={onCancel}

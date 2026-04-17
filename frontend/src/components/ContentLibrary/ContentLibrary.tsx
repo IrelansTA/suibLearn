@@ -150,10 +150,18 @@ export default function ContentLibrary() {
       {/* ── Header ───────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 bg-[#0f0f0f]/95 backdrop-blur border-b border-[#2a2a2a]">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-6 py-3">
-          <h1 className="text-xl font-bold">
-            <span className="text-[#e74c3c]">Sub</span>Learn
-            <span className="text-sm text-[#666] ml-2 font-normal">内容库</span>
-          </h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 rounded-lg hover:bg-[#2a2a2a] transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              ←
+            </button>
+            <h1 className="text-xl font-bold">
+              <span className="text-[#e74c3c]">Sub</span>Learn
+              <span className="text-sm text-[#666] ml-2 font-normal">全部视频</span>
+            </h1>
+          </div>
           <Link
             to="/upload"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#e74c3c] text-white font-medium hover:bg-[#c0392b] transition min-h-[44px] min-w-[44px] text-sm"

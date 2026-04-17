@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, BackgroundTasks
+from typing import Optional
 
 from app.config import settings
 from app.services.storage import (
@@ -59,6 +60,7 @@ async def api_upload(
     source_language: str = Form("ja"),
     video: UploadFile = File(...),
     subtitle: UploadFile = File(...),
+    collection_id: Optional[str] = Form(None),
 ):
     """
     Upload a video file and subtitle file.
@@ -121,6 +123,7 @@ async def api_upload(
         video_path=file_info["video_path"],
         subtitle_path=file_info["subtitle_path"],
         file_size=file_info["file_size"],
+        collection_id=collection_id,
     )
 
     # Enqueue background processing
