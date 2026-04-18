@@ -2,19 +2,28 @@
 
 import json
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.models.database import (
     list_videos,
     get_video,
     get_subtitle_lines,
     delete_video as db_delete_video,
+    update_videos_collection,
+    get_collection,
 )
 from app.services.storage import delete_video_files
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class BatchMoveRequest(BaseModel):
+    video_ids: list[str]
+    collection_id: Optional[str] = None
 
 
 @router.get("")
@@ -48,6 +57,26 @@ async def api_get_video_detail(video_id: str):
     return {
         "video": video,
         "subtitles": subtitle_lines,
+    }
+
+
+@router.post("/batch/move")
+async def api_batch_move_videos(payload: BatchMoveRequest):
+    """Move multiple videos to a specified collection (or None to remove from collection)."""
+    if not payload.video_ids:
+        raise HTTPException(status_code=400, detail="请选择至少一个视频")
+
+    if payload.collection_id:
+        collection = await get_collection(payload.collection_id)
+        if not collection:
+            raise HTTPException(status_code=404, detail="目标合集不存在")
+
+    moved = await update_videos_collection(payload.video_ids, payload.collection_id)
+
+    return {
+        "status": "ok",
+        "moved": moved,
+        "collection_id": payload.collection_id,
     }
 
 

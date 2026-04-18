@@ -174,6 +174,25 @@ async def delete_video(video_id: str):
         await db.commit()
 
 
+async def update_videos_collection(
+    video_ids: list[str],
+    collection_id: Optional[str],
+) -> int:
+    """Batch update the collection_id for a list of videos. Returns number of rows matched."""
+    if not video_ids:
+        return 0
+    async with aiosqlite.connect(_db_path) as db:
+        placeholders = ",".join("?" * len(video_ids))
+        cursor = await db.execute(
+            f"UPDATE videos SET collection_id = ?, updated_at = CURRENT_TIMESTAMP "
+            f"WHERE id IN ({placeholders})",
+            [collection_id, *video_ids],
+        )
+        affected = cursor.rowcount
+        await db.commit()
+        return affected if affected is not None else 0
+
+
 # --- Subtitle Line Operations ---
 
 async def insert_subtitle_lines(video_id: str, lines: list[dict]):

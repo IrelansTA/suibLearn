@@ -12,6 +12,7 @@ export interface VideoItem {
   file_size: number;
   thumbnail_path: string | null;
   status: 'processing' | 'ready' | 'error';
+  collection_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -138,6 +139,18 @@ export async function getVideoDetail(videoId: string): Promise<VideoDetail> {
 /** Delete a video */
 export async function deleteVideo(videoId: string): Promise<void> {
   await request(`/videos/${videoId}`, { method: 'DELETE' });
+}
+
+/** Batch move videos to a collection (null = remove from any collection) */
+export async function moveVideosToCollection(
+  videoIds: string[],
+  collectionId: string | null,
+): Promise<{ status: string; moved: number; collection_id: string | null }> {
+  return request('/videos/batch/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video_ids: videoIds, collection_id: collectionId }),
+  });
 }
 
 /** Get storage usage info */

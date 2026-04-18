@@ -1,7 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getVideos, deleteVideo, getStorageInfo } from '../../services/api';
-import type { VideoItem, StorageInfo } from '../../services/api';
+import {
+  getVideos,
+  deleteVideo,
+  getStorageInfo,
+  getCollections,
+  getCoverUrl,
+  moveVideosToCollection,
+} from '../../services/api';
+import type { VideoItem, StorageInfo, CollectionItem } from '../../services/api';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,6 +59,204 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   error: { label: '错误', cls: 'bg-red-600/20 text-red-400 border-red-600/30' },
 };
 
+const GRADIENTS = [
+  'from-rose-600 to-orange-500',
+  'from-violet-600 to-indigo-500',
+  'from-cyan-600 to-blue-500',
+  'from-emerald-600 to-teal-500',
+  'from-amber-600 to-yellow-500',
+  'from-pink-600 to-fuchsia-500',
+  'from-sky-600 to-cyan-500',
+  'from-red-600 to-pink-500',
+];
+
+function getGradient(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+}
+
+// ---------------------------------------------------------------------------
+// Move-to-Collection Modal
+// ---------------------------------------------------------------------------
+
+interface MoveModalProps {
+  open: boolean;
+  count: number;
+  collections: CollectionItem[];
+  loadingCollections: boolean;
+  submitting: boolean;
+  error: string;
+  onClose: () => void;
+  onConfirm: (collectionId: string | null) => void;
+}
+
+function MoveToCollectionModal({
+  open,
+  count,
+  collections,
+  loadingCollections,
+  submitting,
+  error,
+  onClose,
+  onConfirm,
+}: MoveModalProps) {
+  // `undefined` = nothing chosen, `null` = "无合集" chosen, string = collection id chosen
+  const [selected, setSelected] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (open) setSelected(undefined);
+  }, [open]);
+
+  if (!open) return null;
+
+  const canConfirm = selected !== undefined && !submitting;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={() => !submitting && onClose()}
+    >
+      <div
+        className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <h3 className="text-lg font-bold">
+            <span className="text-[#e74c3c]">移动</span>
+            {count} 个视频到合集
+          </h3>
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="p-2 rounded-lg hover:bg-[#2a2a2a] transition min-w-[44px] min-h-[44px] flex items-center justify-center text-[#888] hover:text-[#e0e0e0] disabled:opacity-40"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Options list */}
+        <div className="flex-1 overflow-y-auto -mx-2 px-2 space-y-1.5">
+          {loadingCollections ? (
+            <div className="py-10 flex justify-center">
+              <div className="w-6 h-6 border-2 border-[#e74c3c] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* "无合集" option */}
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                disabled={submitting}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                  selected === null
+                    ? 'border-[#e74c3c] bg-[#2a1515]'
+                    : 'border-[#2a2a2a] hover:border-[#444] hover:bg-[#1f1f1f]'
+                } disabled:opacity-50`}
+              >
+                <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center shrink-0 text-xl">
+                  ⊘
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">无合集</div>
+                  <div className="text-xs text-[#666]">从当前合集中移除</div>
+                </div>
+                {selected === null && (
+                  <span className="text-[#e74c3c] text-lg shrink-0">✓</span>
+                )}
+              </button>
+
+              {collections.length > 0 && (
+                <div className="h-px bg-[#2a2a2a] my-2" />
+              )}
+
+              {collections.map((c) => {
+                const isSelected = selected === c.id;
+                const gradient = getGradient(c.name);
+                const firstChar = c.name.charAt(0).toUpperCase();
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelected(c.id)}
+                    disabled={submitting}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition text-left ${
+                      isSelected
+                        ? 'border-[#e74c3c] bg-[#2a1515]'
+                        : 'border-[#2a2a2a] hover:border-[#444] hover:bg-[#1f1f1f]'
+                    } disabled:opacity-50`}
+                  >
+                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                      {c.cover_path ? (
+                        <img
+                          src={getCoverUrl(c.cover_path)}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}
+                        >
+                          <span className="text-sm font-bold text-white/80">
+                            {firstChar}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{c.name}</div>
+                      <div className="text-xs text-[#666]">
+                        {c.video_count} 个视频
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="text-[#e74c3c] text-lg shrink-0">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {collections.length === 0 && !loadingCollections && (
+                <div className="py-8 text-center text-sm text-[#666]">
+                  还没有合集，先去首页创建一个吧
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-4 flex items-start gap-2 p-3 bg-[#2a1515] border border-[#e74c3c]/30 rounded-lg shrink-0">
+            <span className="text-[#e74c3c] shrink-0">⚠</span>
+            <p className="text-sm text-[#e74c3c]">{error}</p>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-4 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-3 rounded-xl border border-[#333] text-[#888] hover:bg-[#2a2a2a] hover:text-[#e0e0e0] transition min-h-[44px] disabled:opacity-40 font-medium"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => canConfirm && onConfirm(selected as string | null)}
+            disabled={!canConfirm}
+            className="flex-1 px-4 py-3 rounded-xl bg-[#e74c3c] text-white font-medium hover:bg-[#c0392b] transition min-h-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {submitting ? '移动中...' : '确认移动'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -67,6 +272,15 @@ export default function ContentLibrary() {
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // ---- selection mode ----
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [collections, setCollections] = useState<CollectionItem[]>([]);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState('');
 
   // ---- data fetching ----
 
@@ -129,14 +343,95 @@ export default function ContentLibrary() {
     setConfirmDeleteId(null);
   }, []);
 
+  // ---- selection mode ----
+
+  const toggleSelection = useCallback((videoId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(videoId)) next.delete(videoId);
+      else next.add(videoId);
+      return next;
+    });
+  }, []);
+
+  const enterSelectionMode = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedIds(new Set());
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectableIds = useMemo(
+    () => videos.filter((v) => v.status !== 'error').map((v) => v.id),
+    [videos],
+  );
+
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (selectableIds.every((id) => prev.has(id))) {
+        const next = new Set(prev);
+        selectableIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      const next = new Set(prev);
+      selectableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [selectableIds]);
+
+  const openMoveModal = useCallback(async () => {
+    setMoveError('');
+    setShowMoveModal(true);
+    setLoadingCollections(true);
+    try {
+      const res = await getCollections();
+      setCollections(res.collections);
+    } catch (err: any) {
+      setMoveError(err.message || '加载合集失败');
+    } finally {
+      setLoadingCollections(false);
+    }
+  }, []);
+
+  const handleConfirmMove = useCallback(
+    async (collectionId: string | null) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      setMoving(true);
+      setMoveError('');
+      try {
+        await moveVideosToCollection(ids, collectionId);
+        setShowMoveModal(false);
+        exitSelectionMode();
+        await fetchData();
+      } catch (err: any) {
+        setMoveError(err.message || '移动失败，请重试');
+      } finally {
+        setMoving(false);
+      }
+    },
+    [selectedIds, exitSelectionMode, fetchData],
+  );
+
   // ---- card click ----
 
   const handleCardClick = useCallback(
     (video: VideoItem) => {
+      if (selectionMode) {
+        if (video.status === 'error') return;
+        toggleSelection(video.id);
+        return;
+      }
       if (video.status === 'error') return;
       navigate(`/learn/${video.id}`);
     },
-    [navigate],
+    [navigate, selectionMode, toggleSelection],
   );
 
   // ---- render ----
@@ -162,13 +457,34 @@ export default function ContentLibrary() {
               <span className="text-sm text-[#666] ml-2 font-normal">全部视频</span>
             </h1>
           </div>
-          <Link
-            to="/upload"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#e74c3c] text-white font-medium hover:bg-[#c0392b] transition min-h-[44px] min-w-[44px] text-sm"
-          >
-            <span className="text-lg leading-none">＋</span>
-            <span className="hidden sm:inline">上传视频</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            {selectionMode ? (
+              <button
+                onClick={exitSelectionMode}
+                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#333] text-[#a0a0a0] hover:text-[#e0e0e0] hover:border-[#555] transition min-h-[44px] text-sm font-medium"
+              >
+                <span className="hidden sm:inline">退出选择</span>
+                <span className="sm:hidden">✕</span>
+              </button>
+            ) : (
+              <button
+                onClick={enterSelectionMode}
+                disabled={videos.length === 0}
+                className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#333] text-[#a0a0a0] hover:text-[#e0e0e0] hover:border-[#555] transition min-h-[44px] text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                title="批量选择"
+              >
+                <span className="text-base leading-none">☑</span>
+                <span className="hidden sm:inline">批量选择</span>
+              </button>
+            )}
+            <Link
+              to="/upload"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#e74c3c] text-white font-medium hover:bg-[#c0392b] transition min-h-[44px] min-w-[44px] text-sm"
+            >
+              <span className="text-lg leading-none">＋</span>
+              <span className="hidden sm:inline">上传视频</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -259,34 +575,55 @@ export default function ContentLibrary() {
               const flag = LANG_FLAGS[video.source_language] ?? '🌐';
               const langLabel = LANG_LABELS[video.source_language] ?? video.source_language;
               const isDeleting = deletingId === video.id;
-              const isClickable = video.status !== 'error';
+              const isErrored = video.status === 'error';
+              const isSelected = selectedIds.has(video.id);
+              const isClickable = !isErrored;
 
               return (
                 <div
                   key={video.id}
                   onClick={() => handleCardClick(video)}
-                  className={`group relative bg-[#181818] border border-[#2a2a2a] rounded-xl overflow-hidden transition-all duration-200 ${
+                  className={`group relative bg-[#181818] border rounded-xl overflow-hidden transition-all duration-200 ${
+                    isSelected
+                      ? 'border-[#e74c3c] shadow-lg shadow-[#e74c3c]/10'
+                      : 'border-[#2a2a2a]'
+                  } ${
                     isClickable
                       ? 'cursor-pointer hover:border-[#e74c3c]/50 hover:shadow-lg hover:shadow-[#e74c3c]/5 hover:-translate-y-0.5'
                       : 'opacity-60 cursor-not-allowed'
                   } ${isDeleting ? 'opacity-40 pointer-events-none' : ''}`}
                 >
+                  {selectionMode && isClickable && (
+                    <div
+                      className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center pointer-events-none ${
+                        isSelected
+                          ? 'bg-[#e74c3c] border-[#e74c3c]'
+                          : 'bg-[#0f0f0f]/70 border-[#555]'
+                      }`}
+                    >
+                      {isSelected && (
+                        <span className="text-white text-sm leading-none">✓</span>
+                      )}
+                    </div>
+                  )}
                   {/* Card body */}
                   <div className="p-4 space-y-3">
                     {/* Title row */}
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-medium leading-snug line-clamp-2 flex-1">
+                      <h3 className={`text-sm font-medium leading-snug line-clamp-2 flex-1 ${selectionMode && isClickable ? 'pl-8' : ''}`}>
                         {video.title}
                       </h3>
-                      {/* Delete button */}
-                      <button
-                        onClick={(e) => handleDeleteClick(e, video.id)}
-                        disabled={isDeleting}
-                        className="shrink-0 p-2 rounded-lg text-[#555] hover:text-[#e74c3c] hover:bg-[#2a1515] transition opacity-0 group-hover:opacity-100 focus:opacity-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        title="删除"
-                      >
-                        🗑️
-                      </button>
+                      {/* Delete button (hidden in selection mode) */}
+                      {!selectionMode && (
+                        <button
+                          onClick={(e) => handleDeleteClick(e, video.id)}
+                          disabled={isDeleting}
+                          className="shrink-0 p-2 rounded-lg text-[#555] hover:text-[#e74c3c] hover:bg-[#2a1515] transition opacity-0 group-hover:opacity-100 focus:opacity-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          title="删除"
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </div>
 
                     {/* Badges row */}
@@ -316,6 +653,48 @@ export default function ContentLibrary() {
           </div>
         )}
       </main>
+
+      {/* ── Selection Action Bar ────────────────────────────── */}
+      {selectionMode && (
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-[#181818]/95 backdrop-blur border-t border-[#2a2a2a] shadow-2xl">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+            <button
+              onClick={toggleSelectAll}
+              disabled={selectableIds.length === 0}
+              className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#333] text-[#a0a0a0] hover:text-[#e0e0e0] hover:border-[#555] transition min-h-[44px] text-sm font-medium disabled:opacity-40"
+            >
+              {allSelected ? '取消全选' : '全选'}
+            </button>
+            <div className="flex-1 text-sm text-[#a0a0a0]">
+              已选 <span className="text-[#e0e0e0] font-medium">{selectedIds.size}</span> 个视频
+            </div>
+            <button
+              onClick={openMoveModal}
+              disabled={selectedIds.size === 0}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#e74c3c] text-white font-medium hover:bg-[#c0392b] transition min-h-[44px] text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="text-base leading-none">📂</span>
+              <span className="hidden sm:inline">移动到合集</span>
+              <span className="sm:hidden">移动</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Spacer so fixed action bar doesn't cover last row */}
+      {selectionMode && <div className="h-20" />}
+
+      {/* ── Move to Collection Modal ───────────────────────── */}
+      <MoveToCollectionModal
+        open={showMoveModal}
+        count={selectedIds.size}
+        collections={collections}
+        loadingCollections={loadingCollections}
+        submitting={moving}
+        error={moveError}
+        onClose={() => !moving && setShowMoveModal(false)}
+        onConfirm={handleConfirmMove}
+      />
 
       {/* ── Confirm Delete Dialog ───────────────────────────── */}
       {confirmDeleteId && (
