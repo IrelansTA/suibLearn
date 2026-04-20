@@ -1,13 +1,14 @@
 """SubLearn - 视频字幕学习平台 后端主入口"""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.models.database import init_db
-from app.routers import upload, library, collections
+from app.auth import get_current_user
+from app.routers import auth as auth_router, upload, library, collections
 
 
 @asynccontextmanager
@@ -41,9 +42,12 @@ app.add_middleware(
 )
 
 # Mount routers
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
-app.include_router(library.router, prefix="/api/videos", tags=["library"])
-app.include_router(collections.router, prefix="/api/collections", tags=["collections"])
+# Auth router — login endpoint is public, verify is self-protected
+app.include_router(auth_router.router, prefix="/api/auth", tags=["auth"])
+# Protected routers — require valid JWT on every endpoint
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"], dependencies=[Depends(get_current_user)])
+app.include_router(library.router, prefix="/api/videos", tags=["library"], dependencies=[Depends(get_current_user)])
+app.include_router(collections.router, prefix="/api/collections", tags=["collections"], dependencies=[Depends(get_current_user)])
 
 # Serve media files (for local dev; in production Nginx handles this)
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")

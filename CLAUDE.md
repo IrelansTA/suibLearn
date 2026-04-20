@@ -147,6 +147,7 @@ curl http://localhost/api/health
 
 ## 现有核心功能
 
+- **密码保护**：单密码登录（JWT token，30天有效），所有 API 和页面受保护
 - 上传视频 + 字幕（SRT/ASS/SSA），自动解析、编码检测、双语（日中）识别
 - 日文罗马音注音（pykakasi）
 - 自研播放器：逐句模式（自动暂停）、AB 循环、变速（0.25×–3×）、字幕叠加
@@ -156,6 +157,16 @@ curl http://localhost/api/health
 - 存储容量管理（默认 30GB 上限）
 - MKV 自动转 MP4（ffmpeg 流复制）
 
+## 认证系统
+
+单密码保护，无用户名/注册。
+
+- **配置**：`.env` 中设 `AUTH_PASSWORD`（默认 `sublearn123`），可选配 `JWT_SECRET`、`JWT_EXPIRE_HOURS`（默认 720h = 30天）
+- **流程**：打开网站 → 输入密码 → JWT 存 localStorage → 30天内免登录
+- **后端**：`auth.py` 提供 `get_current_user` 依赖，挂在 upload/library/collections router 上；`/api/auth/login` 和 `/api/health` 不需要认证
+- **前端**：`api.ts` 自动在所有请求加 Bearer header；401 时自动跳登录页
+- **登出**：首页（合集列表）右上角"退出"按钮
+
 ## 可扩展方向（按价值排序）
 
 1. **接入 LLM 翻译**：`translator.py` 已就绪，只需在上传后台任务里调用
@@ -163,7 +174,7 @@ curl http://localhost/api/health
 3. **SRS 复习**：新建 `word_reviews` 表，跟踪用户学习进度，spaced repetition
 4. **缩略图生成**：ffmpeg 抽首帧到 `thumbnail_path`，UI 网格显示封面
 5. **字幕在线编辑**：改字幕、调时轴，保存回数据库
-6. **账号体系 + 云同步**：目前是单实例无鉴权
+6. **多用户体系**：目前单密码保护，可扩展为多用户各自内容隔离
 7. **音频提取 / 听力专项**：ffmpeg 提取音轨，做纯听练习
 
 ## 术语速查

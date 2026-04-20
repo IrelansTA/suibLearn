@@ -25,3 +25,6 @@ python-multipart==0.0.20
 
 # Encoding detection
 chardet==5.2.0
+
+# JWT authentication
+PyJWT>=2.0.0

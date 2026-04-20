@@ -72,14 +72,59 @@ export interface CollectionDetail {
   videos: VideoItem[];
 }
 
+// --- Auth Token Management :::::::::::::::::::::::::::::::::::::::::::::::
+
+const TOKEN_KEY = 'sublearn_token';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function isLoggedIn(): boolean {
+  return !!localStorage.getItem(TOKEN_KEY);
+}
+
+export function logout(): void {
+  clearToken();
+}
+
 // --- API Functions :::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 const BASE_URL = '/api';
 
+/** Global callback invoked on 401 so the app can redirect to login */
+let onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(cb: () => void): void {
+  onUnauthorized = cb;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const resp = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    headers,
   });
+
+  if (resp.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+    throw new Error('未授权，请重新登录');
+  }
 
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ detail: resp.statusText }));
@@ -87,6 +132,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   return resp.json();
+}
+
+/** Login with password */
+export async function login(password: string): Promise<{ token: string }> {
+  const result = await request<{ token: string }>('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  setToken(result.token);
+  return result;
+}
+
+/** Verify current token is valid */
+export async function verifyToken(): Promise<boolean> {
+  try {
+    await request<any>('/auth/verify');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Upload video + subtitle files */
@@ -98,6 +164,11 @@ export async function uploadFiles(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${BASE_URL}/upload`);
 
+    const token = getToken();
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100));
@@ -105,6 +176,12 @@ export async function uploadFiles(
     };
 
     xhr.onload = () => {
+      if (xhr.status === 401) {
+        clearToken();
+        onUnauthorized?.();
+        reject(new Error('未授权，请重新登录'));
+        return;
+      }
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(JSON.parse(xhr.responseText));
       } else {
@@ -177,10 +254,20 @@ export async function getCollectionDetail(collectionId: string): Promise<Collect
 
 /** Create a new collection */
 export async function createCollection(formData: FormData): Promise<CollectionItem> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const resp = await fetch(`${BASE_URL}/collections`, {
     method: 'POST',
+    headers,
     body: formData,
   });
+  if (resp.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+    throw new Error('未授权，请重新登录');
+  }
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ detail: resp.statusText }));
     throw new Error(data.detail || `Request failed: ${resp.status}`);
@@ -190,10 +277,20 @@ export async function createCollection(formData: FormData): Promise<CollectionIt
 
 /** Update a collection */
 export async function updateCollection(collectionId: string, formData: FormData): Promise<CollectionItem> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const resp = await fetch(`${BASE_URL}/collections/${collectionId}`, {
     method: 'PUT',
+    headers,
     body: formData,
   });
+  if (resp.status === 401) {
+    clearToken();
+    onUnauthorized?.();
+    throw new Error('未授权，请重新登录');
+  }
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ detail: resp.statusText }));
     throw new Error(data.detail || `Request failed: ${resp.status}`);

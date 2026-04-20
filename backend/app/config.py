@@ -1,6 +1,7 @@
 """Application configuration - loads from environment variables / .env file."""
 
 import os
+import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -24,6 +25,14 @@ class Settings:
     MEDIA_DIR: str = os.getenv("MEDIA_DIR", str(Path(__file__).resolve().parent.parent / "data" / "media"))
     MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", "0"))  # 0 = no limit
     MAX_TOTAL_STORAGE: int = int(os.getenv("MAX_TOTAL_STORAGE", str(30 * 1024 * 1024 * 1024)))  # 30GB default
+
+    # --- Authentication ---
+    AUTH_PASSWORD: str = os.getenv("AUTH_PASSWORD", "sublearn123")
+    JWT_SECRET: str = os.getenv(
+        "JWT_SECRET",
+        hashlib.sha256((os.getenv("AUTH_PASSWORD", "sublearn123") + "_sublearn_salt_k9x").encode()).hexdigest(),
+    )
+    JWT_EXPIRE_HOURS: int = int(os.getenv("JWT_EXPIRE_HOURS", "720"))  # 30 days
 
     # --- Server ---
     HOST: str = os.getenv("HOST", "0.0.0.0")
